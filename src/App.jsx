@@ -182,9 +182,11 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return seedState;
     const parsed = JSON.parse(raw);
+    const assets = (parsed?.assets || seedState.assets).map(normalizeAsset);
     return {
       ...seedState,
       ...parsed,
+      assets,
       quotes: parsed?.quotes || {},
       history: parsed?.history || {}
     };
@@ -211,6 +213,21 @@ function formatNumber(value, digits = 2) {
 function findCompany(symbol) {
   const s = String(symbol || '').trim().toUpperCase();
   return GPW_COMPANIES.find((c) => c.symbol === s);
+}
+
+function getStooqSymbol(asset) {
+  const fromAsset = String(asset?.stooqSymbol || '').trim().toLowerCase();
+  if (fromAsset) return fromAsset;
+  const fromCompany = findCompany(asset?.symbol)?.stooqSymbol;
+  if (fromCompany) return fromCompany;
+  return `${String(asset?.symbol || '').trim().toLowerCase()}.pl`;
+}
+
+function normalizeAsset(asset) {
+  return {
+    ...asset,
+    stooqSymbol: getStooqSymbol(asset)
+  };
 }
 
 function calculatePosition(asset, transactions, currentPrice) {
@@ -622,9 +639,10 @@ function App() {
 
     await Promise.all(
       state.assets.map(async (asset) => {
-        if (!asset.stooqSymbol) return;
+        const stooqSymbol = getStooqSymbol(asset);
+        if (!stooqSymbol) return;
         try {
-          const quoteRes = await fetch(`/api/quote?s=${encodeURIComponent(asset.stooqSymbol)}`);
+          const quoteRes = await fetch(`/api/quote?s=${encodeURIComponent(stooqSymbol)}`);
           const quoteData = await quoteRes.json();
           if (quoteRes.ok && Number.isFinite(quoteData.close)) {
             updates[asset.id] = { ...quoteData, fetchedAt: new Date().toISOString() };
@@ -634,7 +652,7 @@ function App() {
         }
 
         try {
-          const historyRes = await fetch(`/api/history?s=${encodeURIComponent(asset.stooqSymbol)}&d1=${d1}&d2=${d2}`);
+          const historyRes = await fetch(`/api/history?s=${encodeURIComponent(stooqSymbol)}&d1=${d1}&d2=${d2}`);
           const historyData = await historyRes.json();
           if (historyRes.ok && Array.isArray(historyData.rows)) {
             historyUpdates[asset.id] = historyData.rows;
@@ -714,7 +732,8 @@ function App() {
     reader.onload = () => {
       try {
         const next = JSON.parse(reader.result);
-        setState({ ...seedState, ...next, quotes: next?.quotes || {}, history: next?.history || {} });
+        const assets = (next?.assets || seedState.assets).map(normalizeAsset);
+        setState({ ...seedState, ...next, assets, quotes: next?.quotes || {}, history: next?.history || {} });
         setStatus('Wczytano kopię zapasową JSON.');
       } catch {
         setStatus('Nieprawidłowy plik JSON.');
@@ -734,11 +753,28 @@ function App() {
               <strong>PI</strong>
             </div>
           </div>
-          <p className="eyebrow">GPW · PLN · podsumowanie inwestycji</p>
-          <h1>Portfel Inwestycyjny</h1>
+          <p className="eyebrow">GPW · PLN · prosty i profesjonalny podgląd inwestycji</p>
+          <h1>Przejrzysty portfel dla inwestora indywidualnego na polskiej giełdzie.</h1>
+          <p className="lead">
+            Rejestruj zakupy i sprzedaż akcji, monitoruj wartość pozycji, wynik P/L oraz pełną historię transakcji
+            rozwijaną bezpośrednio pod aktywem.
+          </p>
+          <div className="hero-badges">
+            <span>Automatyczne uzupełnianie nazw spółek GPW</span>
+            <span>Notowania z darmowego źródła</span>
+            <span>Responsywny widok mobilny</span>
+          </div>
         </div>
 
-
+        <div className="hero-card">
+          <div className="hero-card-icon"><ShieldCheck size={28} /></div>
+          <strong>Dane prywatne i lokalne</strong>
+          <span>
+            Portfel jest zapisywany lokalnie w przeglądarce. Kopia JSON pozwala łatwo przenieść dane między
+            urządzeniami.
+          </span>
+          <div className="hero-card-foot">Źródło cen: Stooq (dane mogą być opóźnione)</div>
+        </div>
       </section>
 
       <section className="metrics">
@@ -776,6 +812,10 @@ function App() {
           <div className="panel-head">
             <div>
               <h2>Dodaj transakcję</h2>
+              <p>
+                Wybierz symbol z katalogu GPW/Stooq albo wpisz własny ticker, np. PKN, DNP, PKO lub JSW.
+                Dla znanych symboli nazwa spółki uzupełni się automatycznie.
+              </p>
             </div>
           </div>
 
