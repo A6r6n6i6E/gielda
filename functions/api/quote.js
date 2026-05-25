@@ -1,4 +1,4 @@
-const STOOQ_FIELDS = 'sd2t2ohlcvc1c1p';
+const QUOTE_FIELDS = 'sd2t2ohlcv';
 
 function normalizeHeader(header) {
   return String(header || '')
@@ -18,7 +18,7 @@ function parseStooqNumber(value) {
 }
 
 function csvLineToObject(text) {
-  const lines = text.trim().split(/\r?\n/).filter(Boolean);
+  const lines = String(text || '').trim().split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) return null;
   const headers = lines[0].split(',').map(normalizeHeader);
   const values = lines[1].split(',').map((v) => v.trim());
@@ -26,18 +26,41 @@ function csvLineToObject(text) {
 }
 
 function csvHistoryRows(text) {
-  const lines = text.trim().split(/\r?\n/).filter(Boolean);
+  const lines = String(text || '').trim().split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
-  return lines.slice(1).map((line) => {
-    const values = line.split(',').map((v) => v.trim());
-    const row = Object.fromEntries(headers.map((h, i) => [h, values[i]]));
-    return { date: row.date, close: Number(row.close) };
-  }).filter((r) => r.date && Number.isFinite(r.close));
+  const headers = lines[0].split(',').map(normalizeHeader);
+  return lines
+    .slice(1)
+    .map((line) => {
+      const values = line.split(',').map((v) => v.trim());
+      const row = Object.fromEntries(headers.map((h, i) => [h, values[i]]));
+      return {
+        date: row.date,
+        open: parseStooqNumber(row.open),
+        high: parseStooqNumber(row.high),
+        low: parseStooqNumber(row.low),
+        close: parseStooqNumber(row.close),
+        volume: parseStooqNumber(row.volume)
+      };
+    })
+    .filter((r) => r.date && Number.isFinite(r.close));
 }
 
 function compact(date) {
   return String(date || '').replace(/[^0-9]/g, '');
+}
+
+function isoDateDaysAgo(days) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+function candidateSymbols(raw) {
+  const clean = String(raw || '').trim().toLowerCase();
+  if (!clean) return [];
+  const noSuffix = clean.replace(/\.pl$/, '');
+  return [...new Set([clean, `${noSuffix}.pl`, noSuffix])];
 }
 
 function json(data, status = 200) {
@@ -51,73 +74,109 @@ function json(data, status = 200) {
   });
 }
 
-export async function onRequestGet({ request }) {
-  const url = new URL(request.url);
-  const raw = (url.searchParams.get('s') || '').trim().toLowerCase();
-  if (!raw) return json({ error: 'Brak parametru s, np. /api/quote?s=pkn.pl' }, 400);
-
-  const stooqUrl = `https://stooq.com/q/l/?s=${encodeURIComponent(raw)}&f=${STOOQ_FIELDS}&h&e=csv`;
-  const response = await fetch(stooqUrl, {
-    headers: { 'user-agent': 'PI-Portfolio/1.0 (+Cloudflare Pages Function)' },
+async function fetchText(url) {
+  const response = await fetch(url, {
+    headers: {
+      'user-agent': 'Mozilla/5.0 PI-Portfolio/1.0 Cloudflare-Pages'
+    },
     cf: { cacheTtl: 60, cacheEverything: true }
   });
 
-  if (!response.ok) return json({ error: 'Nie udało się pobrać danych ze Stooq', status: response.status }, 502);
-  const text = await response.text();
-  const row = csvLineToObject(text);
-  if (!row || !row.close || row.close === 'N/D') {
-    return json({ symbol: raw, error: 'Brak notowania dla symbolu w Stooq', raw: text }, 404);
+  if (!response.ok) {
+    return { ok: false, status: response.status, text: '' };
   }
 
-  const close = parseStooqNumber(row.close);
-  let previousClose = null;
+  return { ok: true, status: response.status, text: await response.text() };
+}
 
-  // Stooq może zwrócić dzienną zmianę bezpośrednio jako pola Change oraz %Change
-  // dla zapytania q/l. Jeżeli te pola nie są dostępne, niżej próbujemy policzyć
-  // zmianę z krótkiego zakresu danych historycznych.
-  let dailyChange = parseStooqNumber(row.change ?? row.change1 ?? row.c1);
-  let dailyChangePct = parseStooqNumber(
-    row['%change'] ?? row.changepercent ?? row.changepercentage ?? row.c1p
-  );
+async function getQuote(symbol) {
+  const stooqUrl = `https://stooq.pl/q/l/?s=${encodeURIComponent(symbol)}&f=${QUOTE_FIELDS}&h&e=csv`;
+  const result = await fetchText(stooqUrl);
+  if (!result.ok) return null;
 
-  try {
-    const currentDate = row.date && row.date !== 'N/D' ? new Date(row.date) : new Date();
-    const start = new Date(currentDate);
-    start.setDate(start.getDate() - 12);
-    const d1 = compact(start.toISOString().slice(0, 10));
-    const d2 = compact(currentDate.toISOString().slice(0, 10));
-    const histUrl = `https://stooq.com/q/d/l/?s=${encodeURIComponent(raw)}&d1=${d1}&d2=${d2}&i=d`;
-    const histRes = await fetch(histUrl, {
-      headers: { 'user-agent': 'PI-Portfolio/1.0 (+Cloudflare Pages Function)' },
-      cf: { cacheTtl: 60, cacheEverything: true }
-    });
-    if (histRes.ok) {
-      const histRows = csvHistoryRows(await histRes.text()).sort((a, b) => a.date.localeCompare(b.date));
-      const quoteDate = row.date;
-      const idx = histRows.findIndex((h) => h.date === quoteDate);
-      const prev = idx > 0 ? histRows[idx - 1] : histRows[histRows.length - 2];
-      if (prev && Number.isFinite(prev.close)) {
-        previousClose = prev.close;
-        dailyChange = close - previousClose;
-        dailyChangePct = previousClose ? (dailyChange / previousClose) * 100 : null;
-      }
-    }
-  } catch {
-    // dzienna zmiana jest dodatkiem; brak nie blokuje notowania
-  }
+  const row = csvLineToObject(result.text);
+  const close = parseStooqNumber(row?.close);
 
-  return json({
-    symbol: row.symbol || raw,
+  if (!row || !Number.isFinite(close)) return null;
+
+  return {
+    symbol: row.symbol || symbol,
     date: row.date,
     time: row.time,
     open: parseStooqNumber(row.open),
     high: parseStooqNumber(row.high),
     low: parseStooqNumber(row.low),
     close,
+    volume: parseStooqNumber(row.volume),
+    raw: row
+  };
+}
+
+async function getRecentHistory(symbol) {
+  const d1 = compact(isoDateDaysAgo(21));
+  const d2 = compact(new Date().toISOString().slice(0, 10));
+  const histUrl = `https://stooq.pl/q/d/l/?s=${encodeURIComponent(symbol)}&d1=${d1}&d2=${d2}&i=d`;
+  const result = await fetchText(histUrl);
+  if (!result.ok) return [];
+  return csvHistoryRows(result.text).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export async function onRequestGet({ request }) {
+  const url = new URL(request.url);
+  const raw = (url.searchParams.get('s') || '').trim().toLowerCase();
+  if (!raw) return json({ error: 'Brak parametru s, np. /api/quote?s=pkn.pl' }, 400);
+
+  const attempted = candidateSymbols(raw);
+  let quote = null;
+  let usedSymbol = null;
+  let historyRows = [];
+
+  for (const symbol of attempted) {
+    quote = await getQuote(symbol);
+    historyRows = await getRecentHistory(symbol);
+
+    if (quote || historyRows.length) {
+      usedSymbol = symbol;
+      break;
+    }
+  }
+
+  if (!quote && !historyRows.length) {
+    return json(
+      {
+        symbol: raw,
+        attempted,
+        error: 'Brak notowania dla symbolu w Stooq'
+      },
+      404
+    );
+  }
+
+  const last = historyRows[historyRows.length - 1] || null;
+  const prev = historyRows.length > 1 ? historyRows[historyRows.length - 2] : null;
+
+  const close = Number.isFinite(quote?.close) ? quote.close : last?.close;
+  const previousClose = prev?.close ?? null;
+  const dailyChange = Number.isFinite(close) && Number.isFinite(previousClose) ? close - previousClose : null;
+  const dailyChangePct =
+    Number.isFinite(dailyChange) && Number.isFinite(previousClose) && previousClose !== 0
+      ? (dailyChange / previousClose) * 100
+      : null;
+
+  return json({
+    symbol: quote?.symbol || usedSymbol || raw,
+    querySymbol: raw,
+    stooqSymbol: usedSymbol || raw,
+    date: quote?.date || last?.date || null,
+    time: quote?.time || null,
+    open: quote?.open ?? last?.open ?? null,
+    high: quote?.high ?? last?.high ?? null,
+    low: quote?.low ?? last?.low ?? null,
+    close,
     previousClose,
     dailyChange,
     dailyChangePct,
-    volume: parseStooqNumber(row.volume),
+    volume: quote?.volume ?? last?.volume ?? null,
     source: 'Stooq',
     delayed: true
   });
