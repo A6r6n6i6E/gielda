@@ -290,8 +290,9 @@ function getCurrentPrice(asset, quotes, transactions) {
 
 function quoteLabel(assetId, quotes) {
   const q = quotes[assetId];
-  if (!q) return 'Brak notowania ze Stooq – użyto ceny ostatniej transakcji';
-  return `Stooq: ${q.date || ''}${q.time ? `, ${q.time}` : ''}`.trim();
+  if (!q) return 'Brak notowania – użyto ceny ostatniej transakcji';
+  const source = q.source || 'Dane rynkowe';
+  return `${source}: ${q.date || ''}${q.time ? `, ${q.time}` : ''}`.trim();
 }
 
 
@@ -631,29 +632,34 @@ function App() {
   }
 
   async function refreshQuotes() {
-    setStatus('Pobieram notowania oraz historię GPW ze Stooq...');
+    setStatus('Pobieram notowania oraz historię GPW...');
     const updates = {};
     const historyUpdates = {};
     const d1 = compactDate(getMinTransactionDate(state.transactions));
     const d2 = compactDate(new Date().toISOString().slice(0, 10));
 
+    const failures = [];
+
     await Promise.all(
       state.assets.map(async (asset) => {
         const stooqSymbol = getStooqSymbol(asset);
         if (!stooqSymbol) return;
+
         try {
           const quoteRes = await fetch(`/api/quote?s=${encodeURIComponent(stooqSymbol)}`);
-          const quoteData = await quoteRes.json();
+          const quoteData = await quoteRes.json().catch(() => ({}));
           if (quoteRes.ok && Number.isFinite(quoteData.close)) {
             updates[asset.id] = { ...quoteData, fetchedAt: new Date().toISOString() };
+          } else {
+            failures.push(`${asset.symbol}: ${quoteData.error || quoteRes.status}`);
           }
-        } catch {
-          // ignorujemy pojedyncze błędy symboli
+        } catch (error) {
+          failures.push(`${asset.symbol}: ${error?.message || 'błąd połączenia'}`);
         }
 
         try {
           const historyRes = await fetch(`/api/history?s=${encodeURIComponent(stooqSymbol)}&d1=${d1}&d2=${d2}`);
-          const historyData = await historyRes.json();
+          const historyData = await historyRes.json().catch(() => ({}));
           if (historyRes.ok && Array.isArray(historyData.rows)) {
             historyUpdates[asset.id] = historyData.rows;
           }
@@ -671,10 +677,11 @@ function App() {
 
     const quoteCount = Object.keys(updates).length;
     const historyCount = Object.keys(historyUpdates).length;
+    const failedInfo = failures.length ? ` Nie pobrano: ${failures.slice(0, 5).join('; ')}${failures.length > 5 ? '…' : ''}` : '';
     setStatus(
       quoteCount || historyCount
-        ? `Zaktualizowano ${quoteCount} notowań i ${historyCount} serii historycznych.`
-        : 'Nie pobrano nowych danych. Sprawdź symbole spółek.'
+        ? `Zaktualizowano ${quoteCount} notowań i ${historyCount} serii historycznych.${failedInfo}`
+        : `Nie pobrano nowych danych. ${failedInfo || 'Sprawdź symbole spółek oraz endpoint /api/quote.'}`
     );
   }
 
@@ -753,28 +760,15 @@ function App() {
               <strong>PI</strong>
             </div>
           </div>
-          <p className="eyebrow">GPW · PLN · prosty i profesjonalny podgląd inwestycji</p>
-          <h1>Przejrzysty portfel dla inwestora indywidualnego na polskiej giełdzie.</h1>
+          <p className="eyebrow">GPW · PLN · podsumowanie inwestycji</p>
+          <h1>Portfel Inwestycyjny</h1>
           <p className="lead">
-            Rejestruj zakupy i sprzedaż akcji, monitoruj wartość pozycji, wynik P/L oraz pełną historię transakcji
-            rozwijaną bezpośrednio pod aktywem.
+
           </p>
-          <div className="hero-badges">
-            <span>Automatyczne uzupełnianie nazw spółek GPW</span>
-            <span>Notowania z darmowego źródła</span>
-            <span>Responsywny widok mobilny</span>
-          </div>
+
         </div>
 
-        <div className="hero-card">
-          <div className="hero-card-icon"><ShieldCheck size={28} /></div>
-          <strong>Dane prywatne i lokalne</strong>
-          <span>
-            Portfel jest zapisywany lokalnie w przeglądarce. Kopia JSON pozwala łatwo przenieść dane między
-            urządzeniami.
-          </span>
-          <div className="hero-card-foot">Źródło cen: Stooq (dane mogą być opóźnione)</div>
-        </div>
+
       </section>
 
       <section className="metrics">
