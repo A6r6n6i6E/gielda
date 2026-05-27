@@ -955,3 +955,9 @@ td small {
   color: #475569;
   background: rgba(255, 255, 255, 0.78);
 }
+
+.bottom-notices {
+  margin-top: 18px;
+  display: grid;
+  gap: 10px;
+}

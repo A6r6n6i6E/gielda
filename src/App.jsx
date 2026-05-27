@@ -953,9 +953,6 @@ function App() {
         />
       </section>
 
-      {status && <div className="notice">{status}</div>}
-      {syncStatus && <div className="notice sync-notice">{syncStatus}</div>}
-
       <section className="panel portfolio-panel">
         <div className="panel-head wrap">
           <div>
@@ -1216,6 +1213,10 @@ function App() {
           <ClosedPositionsCard rows={closedRows} />
         </div>
       </section>
+      <div className="bottom-notices">
+        {status && <div className="notice">{status}</div>}
+        {syncStatus && <div className="notice sync-notice">{syncStatus}</div>}
+      </div>
     </main>
   );
 }
