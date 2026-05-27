@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 180" role="img" aria-label="Portfel Inwestycyjny PI">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eff6ff"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <linearGradient id="pi" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+  <rect width="360" height="180" rx="36" fill="url(#bg)"/>
+  <circle cx="180" cy="90" r="58" fill="url(#pi)"/>
+  <text x="180" y="115" text-anchor="middle" font-size="82" font-weight="900" fill="#fff" font-family="Georgia, serif">π</text>
+  <path d="M84 112c-32-6-54-29-58-58 18 2 34 9 47 22 10-18 28-32 50-38-15 22-18 47-7 73-12 5-22 6-32 1Z" fill="#0f172a" opacity=".92"/>
+  <path d="M61 48 34 29l8 34M91 50l24-26-9 39" fill="none" stroke="#0f172a" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M276 113c32-6 54-29 58-58-18 2-34 9-47 22-10-18-28-32-50-38 15 22 18 47 7 73 12 5 22 6 32 1Z" fill="#0f172a" opacity=".92"/>
+  <path d="M251 48c24-18 50-18 72 0M250 76c28-4 53 7 70 29" fill="none" stroke="#0f172a" stroke-width="10" stroke-linecap="round"/>
+</svg>
