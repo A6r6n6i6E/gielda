@@ -8,9 +8,9 @@ function sendJson(res, data, status = 200) {
   res.end(JSON.stringify(data, null, 2));
 }
 
-function stooqDevApiPlugin() {
+function yahooDevApiPlugin() {
   return {
-    name: 'pi-market-data-dev-api',
+    name: 'pi-yahoo-dev-api',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url, 'http://localhost');
@@ -29,10 +29,9 @@ function stooqDevApiPlugin() {
           return sendJson(res, {
             symbol: raw,
             rows: [],
-            error: 'Brak danych dla symbolu w Stooq oraz Yahoo Finance',
+            error: 'Brak danych dla symbolu w Yahoo Finance',
             tried: result.tried,
-            stooq: result.stooq,
-            yahoo: result.yahoo
+            provider: 'yahoo'
           }, 404);
         }
 
@@ -50,7 +49,6 @@ function stooqDevApiPlugin() {
         return sendJson(res, {
           ...latestQuoteFromRows(result.symbol, result.rows, result.source),
           provider: result.provider,
-          fallbackFrom: result.fallbackFrom ? { source: result.fallbackFrom.source, tried: result.fallbackFrom.tried } : null,
           localDev: true
         });
       });
@@ -59,5 +57,5 @@ function stooqDevApiPlugin() {
 }
 
 export default defineConfig({
-  plugins: [react(), stooqDevApiPlugin()]
+  plugins: [react(), yahooDevApiPlugin()]
 });

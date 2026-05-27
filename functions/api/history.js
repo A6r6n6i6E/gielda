@@ -15,18 +15,17 @@ export async function onRequestGet({ request }) {
     return json({
       symbol: raw,
       rows: [],
-      error: 'Brak danych historycznych dla symbolu w Stooq oraz Yahoo Finance',
+      error: 'Brak danych historycznych dla symbolu w Yahoo Finance',
       tried: result.tried,
-      stooq: result.stooq,
-      yahoo: result.yahoo
+      provider: 'yahoo'
     }, 404);
   }
 
   return json({
     symbol: result.symbol,
     rows: result.rows,
-    source: result.source,
-    provider: result.provider,
+    source: 'Yahoo Finance',
+    provider: 'yahoo',
     delayed: true
   });
 }

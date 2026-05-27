@@ -13,17 +13,15 @@ export async function onRequestGet({ request }) {
     return json({
       symbol: raw,
       rows: [],
-      error: 'Brak danych dla symbolu w Stooq oraz Yahoo Finance',
+      error: 'Brak danych dla symbolu w Yahoo Finance',
       tried: result.tried,
-      stooq: result.stooq,
-      yahoo: result.yahoo
+      provider: 'yahoo'
     }, 404);
   }
 
   return json({
     ...latestQuoteFromRows(result.symbol, result.rows, result.source),
-    provider: result.provider,
-    fallbackFrom: result.fallbackFrom ? { source: result.fallbackFrom.source, tried: result.fallbackFrom.tried } : null
+    provider: 'yahoo'
   });
 }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ArrowDownRight,
@@ -21,6 +21,8 @@ import './styles.css';
 
 const STORAGE_KEY = 'pi-portfolio-gpw-v4';
 const PLN = 'PLN';
+const DEFAULT_LOGO_URL = '/logo.svg';
+const REMOTE_STATUS_KEY = 'pi-remote-sync-status';
 
 const GPW_COMPANIES = [
   { symbol: '11B', name: '11 bit studios S.A.', stooqSymbol: '11b.pl', sector: 'Gry' },
@@ -194,6 +196,30 @@ function loadState() {
     return seedState;
   }
 }
+
+function portfolioPayloadFromState(state) {
+  return {
+    assets: (state.assets || []).map(normalizeAsset),
+    transactions: state.transactions || []
+  };
+}
+
+function stateFromPortfolio(portfolio, fallback = seedState) {
+  const assets = (portfolio?.assets || fallback.assets || seedState.assets).map(normalizeAsset);
+  const transactions = portfolio?.transactions || fallback.transactions || seedState.transactions;
+  return {
+    ...fallback,
+    assets,
+    transactions,
+    quotes: fallback.quotes || {},
+    history: fallback.history || {}
+  };
+}
+
+function hasPortfolioData(portfolio) {
+  return Array.isArray(portfolio?.transactions) && portfolio.transactions.length > 0;
+}
+
 
 function formatMoney(value) {
   const n = Number.isFinite(value) ? value : 0;
@@ -485,28 +511,36 @@ function AllocationChart({ rows }) {
 }
 
 function BrandMark() {
+  const [useFallbackLogo, setUseFallbackLogo] = useState(false);
+
+  if (!useFallbackLogo) {
+    return (
+      <div className="brand-logo custom" aria-label="Logo portfela">
+        <img src={DEFAULT_LOGO_URL} alt="Logo portfela" onError={() => setUseFallbackLogo(true)} />
+      </div>
+    );
+  }
+
   return (
     <div className="brand-logo" aria-hidden="true">
-      <svg viewBox="0 0 180 96" role="img">
+      <svg viewBox="0 0 220 120" role="img">
         <defs>
           <linearGradient id="piGradient" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#3b82f6" />
+            <stop offset="0%" stopColor="#1d4ed8" />
             <stop offset="100%" stopColor="#7c3aed" />
           </linearGradient>
+          <linearGradient id="animalGradient" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#0f172a" />
+            <stop offset="100%" stopColor="#334155" />
+          </linearGradient>
         </defs>
-        <path
-          d="M48 72c-12-2-23-10-29-21-5-9-7-21-1-30 3-5 9-8 15-8 8 0 14 5 18 11 5-2 8-6 12-10 5-6 12-12 22-12 5 0 9 2 12 5-8 0-12 3-16 8-5 6-7 11-7 19 0 16 13 30 13 30-8 0-14-2-20-7-3-2-6-5-8-9l-3 7c-2 5-6 12-18 17Z"
-          fill="#101828"
-          opacity="0.96"
-        />
-        <path
-          d="M132 74c11-1 22-8 29-18 6-10 8-23 2-33-4-7-11-10-19-10-6 0-12 2-16 7 4 1 8 5 10 10 3 6 2 13-2 18 11 1 19 8 25 16-8 1-14 1-22 0-4 4-8 7-14 10 0 0 5-8 5-17 0-7-3-14-9-19-5-5-11-7-18-7-2 0-4 0-6 1 4-7 12-12 23-12 11 0 21 4 30 11-2-8-8-15-16-19 7 0 13 2 19 6 10 8 16 19 18 32 1 10-1 20-7 28-8 11-20 18-32 20Z"
-          fill="#101828"
-          opacity="0.96"
-        />
-        <path d="M66 22h48" stroke="url(#piGradient)" strokeWidth="11" strokeLinecap="round" />
-        <path d="M78 22v48" stroke="url(#piGradient)" strokeWidth="11" strokeLinecap="round" />
-        <path d="M102 22v48" stroke="url(#piGradient)" strokeWidth="11" strokeLinecap="round" />
+        <rect x="82" y="20" width="56" height="64" rx="20" fill="url(#piGradient)" />
+        <text x="110" y="67" textAnchor="middle" fontSize="54" fontWeight="900" fill="white" fontFamily="Georgia, serif">π</text>
+        <path d="M56 78c-14-2-27-11-34-24-6-11-7-25 1-34 5-6 13-9 21-7 9 2 15 9 18 17 9-3 16-10 23-18 6-7 13-10 23-9-10 4-17 11-20 21-4 12 1 25 12 35-10 1-20-2-28-9-5-4-9-9-11-15l-8 13c-3 5-8 8-15 8 5 7 11 12 18 15Z" fill="url(#animalGradient)" />
+        <path d="M47 17l-20-8 9 18M64 23l12-18-22 7" fill="none" stroke="#0f172a" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M158 80c18-2 31-13 38-27 6-13 4-29-6-37-8-7-22-6-31 3-7 7-9 17-5 27-9-1-18 1-26 6 8 5 16 8 25 8 1 8-1 15-6 22 4 0 7 0 11-2Z" fill="url(#animalGradient)" />
+        <path d="M168 19c13-9 27-8 36 1M162 34c17-2 30 4 39 16" fill="none" stroke="#0f172a" strokeWidth="7" strokeLinecap="round" />
+        <circle cx="177" cy="32" r="3.5" fill="white" />
       </svg>
     </div>
   );
@@ -525,11 +559,106 @@ function App() {
   });
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
+  const [syncStatus, setSyncStatus] = useState(() => localStorage.getItem(REMOTE_STATUS_KEY) || 'Łączenie z bazą...');
   const [expanded, setExpanded] = useState({});
+  const remoteReadyRef = useRef(false);
+  const applyingRemoteRef = useRef(false);
+  const saveTimerRef = useRef(null);
+  const refreshInProgressRef = useRef(false);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRemotePortfolio() {
+      try {
+        const response = await fetch('/api/portfolio');
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        if (cancelled) return;
+
+        if (hasPortfolioData(data)) {
+          applyingRemoteRef.current = true;
+          setState((current) => stateFromPortfolio(data, current));
+          setTimeout(() => {
+            applyingRemoteRef.current = false;
+          }, 0);
+          setSyncStatus('Dane zsynchronizowane z Cloudflare D1.');
+          localStorage.setItem(REMOTE_STATUS_KEY, 'Dane zsynchronizowane z Cloudflare D1.');
+        } else {
+          setSyncStatus('Baza D1 jest pusta — zapisuję lokalny portfel w chmurze.');
+          localStorage.setItem(REMOTE_STATUS_KEY, 'Baza D1 jest pusta — zapisuję lokalny portfel w chmurze.');
+        }
+
+        remoteReadyRef.current = true;
+      } catch (error) {
+        if (cancelled) return;
+        remoteReadyRef.current = false;
+        const message = `Tryb lokalny — brak połączenia z D1 (${error?.message || 'błąd API'}).`;
+        setSyncStatus(message);
+        localStorage.setItem(REMOTE_STATUS_KEY, message);
+      }
+    }
+
+    loadRemotePortfolio();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!remoteReadyRef.current || applyingRemoteRef.current) return;
+
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        const response = await fetch('/api/portfolio', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(portfolioPayloadFromState(state))
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        setSyncStatus('Zapisano w Cloudflare D1.');
+        localStorage.setItem(REMOTE_STATUS_KEY, 'Zapisano w Cloudflare D1.');
+      } catch (error) {
+        const message = `Nie zapisano w D1 — dane zostają lokalnie (${error?.message || 'błąd API'}).`;
+        setSyncStatus(message);
+        localStorage.setItem(REMOTE_STATUS_KEY, message);
+      }
+    }, 800);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [state.assets, state.transactions]);
+
+
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && state.assets.length > 0) {
+        refreshQuotes({ silent: true });
+      }
+    }, 60_000);
+
+    return () => window.clearInterval(interval);
+  }, [state.assets, state.transactions]);
 
   const rows = useMemo(() => {
     return state.assets
@@ -568,6 +697,20 @@ function App() {
       count: activeRows.length
     };
   }, [rows, activeRows]);
+
+  const openPositionsSummary = useMemo(() => {
+    const value = activeRows.reduce((s, r) => s + r.value, 0);
+    const cost = activeRows.reduce((s, r) => s + r.cost, 0);
+    const profitLoss = value - cost;
+    const profitLossPct = cost > 0 ? (profitLoss / cost) * 100 : 0;
+
+    return {
+      value,
+      cost,
+      profitLoss,
+      profitLossPct
+    };
+  }, [activeRows]);
 
   function onSymbolChange(value) {
     const symbol = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -631,8 +774,11 @@ function App() {
     }));
   }
 
-  async function refreshQuotes() {
-    setStatus('Pobieram notowania oraz historię GPW...');
+  async function refreshQuotes(options = {}) {
+    if (refreshInProgressRef.current) return;
+    refreshInProgressRef.current = true;
+    const silent = Boolean(options.silent);
+    if (!silent) setStatus('Pobieram notowania oraz historię z Yahoo Finance...');
     const updates = {};
     const historyUpdates = {};
     const d1 = compactDate(getMinTransactionDate(state.transactions));
@@ -678,11 +824,19 @@ function App() {
     const quoteCount = Object.keys(updates).length;
     const historyCount = Object.keys(historyUpdates).length;
     const failedInfo = failures.length ? ` Nie pobrano: ${failures.slice(0, 5).join('; ')}${failures.length > 5 ? '…' : ''}` : '';
-    setStatus(
-      quoteCount || historyCount
-        ? `Zaktualizowano ${quoteCount} notowań i ${historyCount} serii historycznych.${failedInfo}`
-        : `Nie pobrano nowych danych. ${failedInfo || 'Sprawdź symbole spółek oraz endpoint /api/quote.'}`
-    );
+
+
+    if (!silent) {
+      setStatus(
+        quoteCount || historyCount
+          ? `Zaktualizowano ${quoteCount} notowań i ${historyCount} serii historycznych.${failedInfo}`
+          : `Nie pobrano nowych danych. ${failedInfo || 'Sprawdź symbole spółek oraz endpoint /api/quote.'}`
+      );
+    } else if (failures.length && !quoteCount && !historyCount) {
+      setStatus(`Nie pobrano nowych danych w tle. ${failedInfo}`);
+    }
+
+    refreshInProgressRef.current = false;
   }
 
   function exportCsv() {
@@ -785,11 +939,11 @@ function App() {
           icon={<WalletCards size={24} />}
         />
         <MetricCard
-          title="Łączny zysk/strata"
-          value={formatMoney(totals.pl)}
-          sub={`${formatNumber(totals.plPct)}%`}
-          icon={totals.pl >= 0 ? <ArrowUpRight size={24} /> : <ArrowDownRight size={24} />}
-          tone={totals.pl >= 0 ? 'good' : 'bad'}
+          title="Zrealizowany zysk/strata"
+          value={formatMoney(totals.realized)}
+          sub="wynik z zamkniętych transakcji"
+          icon={totals.realized >= 0 ? <ArrowUpRight size={24} /> : <ArrowDownRight size={24} />}
+          tone={totals.realized >= 0 ? 'good' : 'bad'}
         />
         <MetricCard
           title="Liczba aktywów"
@@ -800,104 +954,7 @@ function App() {
       </section>
 
       {status && <div className="notice">{status}</div>}
-
-      <section className="top-grid">
-        <div className="panel transaction-panel">
-          <div className="panel-head">
-            <div>
-              <h2>Dodaj transakcję</h2>
-              <p>
-                Wybierz symbol z katalogu GPW/Stooq albo wpisz własny ticker, np. PKN, DNP, PKO lub JSW.
-                Dla znanych symboli nazwa spółki uzupełni się automatycznie.
-              </p>
-            </div>
-          </div>
-
-          <form className="form tx-form" onSubmit={addTransaction}>
-            <div className="field symbol-field">
-              <label>Symbol GPW</label>
-              <input list="gpw-symbols" placeholder="np. PKN" value={txForm.symbol} onChange={(e) => onSymbolChange(e.target.value)} />
-              <datalist id="gpw-symbols">
-                {GPW_COMPANIES.map((c) => (
-                  <option key={c.symbol} value={c.symbol}>{c.name}</option>
-                ))}
-              </datalist>
-            </div>
-
-            <div className="field name-field">
-              <label>Nazwa spółki</label>
-              <input
-                placeholder="uzupełniana automatycznie lub wpisz ręcznie"
-                value={txForm.name}
-                onChange={(e) => setTxForm({ ...txForm, name: e.target.value })}
-              />
-            </div>
-
-            <div className="field">
-              <label>Typ</label>
-              <select value={txForm.type} onChange={(e) => setTxForm({ ...txForm, type: e.target.value })}>
-                <option value="buy">Kupno</option>
-                <option value="sell">Sprzedaż</option>
-              </select>
-            </div>
-
-            <div className="field">
-              <label>Data</label>
-              <input type="date" value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} />
-            </div>
-
-            <div className="field">
-              <label>Liczba sztuk</label>
-              <input
-                type="number"
-                step="0.0001"
-                placeholder="100"
-                value={txForm.quantity}
-                onChange={(e) => setTxForm({ ...txForm, quantity: e.target.value })}
-              />
-            </div>
-
-            <div className="field">
-              <label>Cena za sztukę</label>
-              <input
-                type="number"
-                step="0.0001"
-                placeholder="120.50"
-                value={txForm.price}
-                onChange={(e) => setTxForm({ ...txForm, price: e.target.value })}
-              />
-            </div>
-
-            <div className="field">
-              <label>Prowizja (PLN)</label>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="0"
-                value={txForm.fees}
-                onChange={(e) => setTxForm({ ...txForm, fees: e.target.value })}
-              />
-            </div>
-
-            <div className="form-actions">
-              <button className="primary" type="submit">
-                <Plus size={17} /> Dodaj transakcję
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <div className="panel allocation-panel">
-          <div className="panel-head">
-            <div>
-              <h2>Alokacja portfela</h2>
-              <p>Podział bieżącej wartości aktywów według poszczególnych spółek.</p>
-            </div>
-            <strong>{formatMoney(totals.value)}</strong>
-          </div>
-          <AllocationChart rows={activeRows} />
-        </div>
-      </section>
+      {syncStatus && <div className="notice sync-notice">{syncStatus}</div>}
 
       <section className="panel portfolio-panel">
         <div className="panel-head wrap">
@@ -915,7 +972,7 @@ function App() {
                 onChange={(e) => setQuery(e.target.value)}
               />
             </label>
-            <button onClick={refreshQuotes} type="button">
+            <button onClick={() => refreshQuotes()} type="button">
               <RefreshCw size={16} /> Odśwież ceny i historię
             </button>
             <button onClick={exportCsv} type="button">
@@ -1022,8 +1079,119 @@ function App() {
                   </React.Fragment>
                 );
               })}
+              <tr className="summary-row">
+                <td colSpan="7">
+                  <b>Podsumowanie otwartych pozycji</b>
+                </td>
+                <td>
+                  <span className={openPositionsSummary.profitLossPct >= 0 ? 'pill good' : 'pill bad'}>
+                    {formatNumber(openPositionsSummary.profitLossPct)}%
+                  </span>
+                </td>
+                <td className={openPositionsSummary.profitLoss >= 0 ? 'good-text' : 'bad-text'}>
+                  {formatMoney(openPositionsSummary.profitLoss)}
+                </td>
+              </tr>
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section className="top-grid">
+        <div className="panel transaction-panel">
+          <div className="panel-head">
+            <div>
+              <h2>Dodaj transakcję</h2>
+              <p>
+                Wybierz symbol GPW albo wpisz własny ticker, np. PKN, DNP, PKO lub JSW. Ceny pobierane są z Yahoo Finance.
+                Dla znanych symboli nazwa spółki uzupełni się automatycznie.
+              </p>
+            </div>
+          </div>
+
+          <form className="form tx-form" onSubmit={addTransaction}>
+            <div className="field symbol-field">
+              <label>Symbol GPW</label>
+              <input list="gpw-symbols" placeholder="np. PKN" value={txForm.symbol} onChange={(e) => onSymbolChange(e.target.value)} />
+              <datalist id="gpw-symbols">
+                {GPW_COMPANIES.map((c) => (
+                  <option key={c.symbol} value={c.symbol}>{c.name}</option>
+                ))}
+              </datalist>
+            </div>
+
+            <div className="field name-field">
+              <label>Nazwa spółki</label>
+              <input
+                placeholder="uzupełniana automatycznie lub wpisz ręcznie"
+                value={txForm.name}
+                onChange={(e) => setTxForm({ ...txForm, name: e.target.value })}
+              />
+            </div>
+
+            <div className="field">
+              <label>Typ</label>
+              <select value={txForm.type} onChange={(e) => setTxForm({ ...txForm, type: e.target.value })}>
+                <option value="buy">Kupno</option>
+                <option value="sell">Sprzedaż</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <label>Data</label>
+              <input type="date" value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} />
+            </div>
+
+            <div className="field">
+              <label>Liczba sztuk</label>
+              <input
+                type="number"
+                step="0.0001"
+                placeholder="100"
+                value={txForm.quantity}
+                onChange={(e) => setTxForm({ ...txForm, quantity: e.target.value })}
+              />
+            </div>
+
+            <div className="field">
+              <label>Cena za sztukę</label>
+              <input
+                type="number"
+                step="0.0001"
+                placeholder="120.50"
+                value={txForm.price}
+                onChange={(e) => setTxForm({ ...txForm, price: e.target.value })}
+              />
+            </div>
+
+            <div className="field">
+              <label>Prowizja (PLN)</label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="0"
+                value={txForm.fees}
+                onChange={(e) => setTxForm({ ...txForm, fees: e.target.value })}
+              />
+            </div>
+
+            <div className="form-actions">
+              <button className="primary" type="submit">
+                <Plus size={17} /> Dodaj transakcję
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div className="panel allocation-panel">
+          <div className="panel-head">
+            <div>
+              <h2>Alokacja portfela</h2>
+              <p>Podział bieżącej wartości aktywów według poszczególnych spółek.</p>
+            </div>
+            <strong>{formatMoney(totals.value)}</strong>
+          </div>
+          <AllocationChart rows={activeRows} />
         </div>
       </section>
 
@@ -1032,7 +1200,7 @@ function App() {
           <div className="panel-head">
             <div>
               <h2>Wartość portfela w czasie</h2>
-              <p>Wykres jest liczony na podstawie historii transakcji oraz dziennych cen zamknięcia pobranych ze Stooq.</p>
+              <p>Wykres jest liczony na podstawie historii transakcji oraz dziennych cen zamknięcia pobranych z Yahoo Finance.</p>
             </div>
           </div>
           <PortfolioChart series={portfolioSeries} />

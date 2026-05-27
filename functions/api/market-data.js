@@ -1,4 +1,4 @@
-const CACHE_SECONDS = 120;
+const CACHE_SECONDS = 60;
 
 export function parseMarketNumber(value) {
   if (value === null || value === undefined) return null;
@@ -6,33 +6,6 @@ export function parseMarketNumber(value) {
   if (!cleaned || cleaned === 'N/D' || cleaned === 'null') return null;
   const number = Number(cleaned);
   return Number.isFinite(number) ? number : null;
-}
-
-export function normalizeHeader(header) {
-  return String(header || '').trim().toLowerCase().replaceAll(' ', '').replaceAll('_', '').replaceAll('-', '');
-}
-
-export function csvToRows(text) {
-  const lines = String(text || '').trim().split(/\r?\n/).filter(Boolean);
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map(normalizeHeader);
-  return lines
-    .slice(1)
-    .map((line) => {
-      const values = line.split(',').map((v) => v.trim());
-      const row = Object.fromEntries(headers.map((h, i) => [h, values[i]]));
-      return {
-        symbol: row.symbol,
-        date: row.date,
-        time: row.time,
-        open: parseMarketNumber(row.open),
-        high: parseMarketNumber(row.high),
-        low: parseMarketNumber(row.low),
-        close: parseMarketNumber(row.close),
-        volume: parseMarketNumber(row.volume)
-      };
-    })
-    .filter((r) => r.date && Number.isFinite(r.close));
 }
 
 export function compact(date) {
@@ -59,13 +32,6 @@ export function fromCompactDate(value, fallback) {
   return `${clean.slice(0, 4)}-${clean.slice(4, 6)}-${clean.slice(6, 8)}`;
 }
 
-export function stooqCandidateSymbols(raw) {
-  const clean = String(raw || '').trim().toLowerCase();
-  if (!clean) return [];
-  const noSuffix = clean.replace(/\.pl$/, '').replace(/\.wa$/, '');
-  return [...new Set([clean, `${noSuffix}.pl`, noSuffix])];
-}
-
 export function yahooCandidateSymbols(raw) {
   const clean = String(raw || '').trim().toUpperCase();
   if (!clean) return [];
@@ -73,30 +39,8 @@ export function yahooCandidateSymbols(raw) {
   return [...new Set([clean.endsWith('.WA') ? clean : `${noSuffix}.WA`, noSuffix])];
 }
 
-export function stooqHistoryUrls(symbol, d1, d2) {
-  return [
-    `https://stooq.pl/q/d/l/?s=${encodeURIComponent(symbol)}&d1=${d1}&d2=${d2}&i=d`,
-    `https://stooq.com/q/d/l/?s=${encodeURIComponent(symbol)}&d1=${d1}&d2=${d2}&i=d`
-  ];
-}
-
-export function stooqQuoteUrls(symbol) {
-  return [
-    `https://stooq.pl/q/l/?s=${encodeURIComponent(symbol)}&f=sd2t2ohlcv&h&e=csv`,
-    `https://stooq.com/q/l/?s=${encodeURIComponent(symbol)}&f=sd2t2ohlcv&h&e=csv`
-  ];
-}
-
-async function fetchText(url) {
-  const response = await fetch(url, {
-    headers: {
-      'user-agent': 'PI-Portfolio/1.0 (+https://gielda.pages.dev)',
-      accept: 'text/csv,text/plain,*/*'
-    },
-    cf: { cacheTtl: CACHE_SECONDS, cacheEverything: true }
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.text();
+export function yahooChartUrl(symbol, period1, period2) {
+  return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${period2}&interval=1d&events=history`;
 }
 
 async function fetchJson(url) {
@@ -109,42 +53,6 @@ async function fetchJson(url) {
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
-}
-
-export async function getStooqHistory(rawSymbol, d1, d2) {
-  const tried = [];
-  for (const symbol of stooqCandidateSymbols(rawSymbol)) {
-    for (const url of stooqHistoryUrls(symbol, d1, d2)) {
-      tried.push(url);
-      try {
-        const rows = csvToRows(await fetchText(url)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
-        if (rows.length) return { symbol, rows, source: 'Stooq', tried };
-      } catch {
-        // next symbol/domain
-      }
-    }
-  }
-  return { symbol: rawSymbol, rows: [], source: 'Stooq', tried };
-}
-
-export async function getStooqQuote(rawSymbol) {
-  const tried = [];
-  for (const symbol of stooqCandidateSymbols(rawSymbol)) {
-    for (const url of stooqQuoteUrls(symbol)) {
-      tried.push(url);
-      try {
-        const rows = csvToRows(await fetchText(url));
-        if (rows.length) return { symbol, row: rows[0], source: 'Stooq quote', tried };
-      } catch {
-        // next symbol/domain
-      }
-    }
-  }
-  return { symbol: rawSymbol, row: null, source: 'Stooq quote', tried };
-}
-
-export function yahooChartUrl(symbol, period1, period2) {
-  return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${period2}&interval=1d&events=history`;
 }
 
 export function parseYahooRows(data) {
@@ -175,33 +83,20 @@ export async function getYahooHistory(rawSymbol, d1, d2) {
     tried.push(url);
     try {
       const rows = parseYahooRows(await fetchJson(url)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
-      if (rows.length) return { symbol, rows, source: 'Yahoo Finance', tried };
+      if (rows.length) return { symbol, rows, source: 'Yahoo Finance', provider: 'yahoo', tried };
     } catch {
       // next symbol
     }
   }
-  return { symbol: rawSymbol, rows: [], source: 'Yahoo Finance', tried };
+
+  return { symbol: rawSymbol, rows: [], source: 'Yahoo Finance', provider: 'yahoo', tried };
 }
 
 export async function getMarketHistory(rawSymbol, d1, d2) {
-  const stooq = await getStooqHistory(rawSymbol, d1, d2);
-  if (stooq.rows.length) return { ...stooq, provider: 'stooq' };
-
-  const yahoo = await getYahooHistory(rawSymbol, d1, d2);
-  if (yahoo.rows.length) return { ...yahoo, provider: 'yahoo', fallbackFrom: stooq };
-
-  return {
-    symbol: rawSymbol,
-    rows: [],
-    source: 'Stooq/Yahoo Finance',
-    provider: null,
-    tried: [...stooq.tried, ...yahoo.tried],
-    stooq,
-    yahoo
-  };
+  return getYahooHistory(rawSymbol, d1, d2);
 }
 
-export function latestQuoteFromRows(symbol, rows, source) {
+export function latestQuoteFromRows(symbol, rows, source = 'Yahoo Finance') {
   const sorted = rows.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const last = sorted[sorted.length - 1];
   const prev = sorted.length > 1 ? sorted[sorted.length - 2] : null;

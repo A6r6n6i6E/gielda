@@ -783,3 +783,175 @@ td small {
   .chart-stats { grid-template-columns: 1fr; }
   .bottom-grid { margin-top: 14px; }
 }
+
+
+.brand-logo.custom {
+  background: #fff;
+  padding: 6px;
+}
+
+.brand-logo.custom img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+
+
+
+
+/* v11: panel Aktywa jest pierwszy, więc potrzebuje odstępu od formularza i alokacji. */
+.portfolio-panel {
+  margin-bottom: 18px;
+}
+
+.summary-row td {
+  background: linear-gradient(180deg, #f8fbff, #eef5ff);
+  border-top: 2px solid var(--line);
+  font-weight: 950;
+}
+
+.summary-row td:first-child {
+  color: var(--text);
+}
+
+/* v11: tryb poziomy na telefonie — cała tabela Aktywa mieści się bez przewijania w bok. */
+@media (max-width: 950px) and (orientation: landscape) {
+  .app-shell {
+    width: calc(100% - 16px);
+    padding-top: 10px;
+  }
+
+  .portfolio-panel .panel-head.wrap {
+    display: grid;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .portfolio-panel .panel-head h2 {
+    font-size: 17px;
+  }
+
+  .portfolio-panel .panel-head p {
+    display: none;
+  }
+
+  .portfolio-panel .toolbar {
+    display: grid;
+    grid-template-columns: minmax(160px, 1fr) repeat(4, auto);
+    gap: 6px;
+    align-items: center;
+  }
+
+  .portfolio-panel .toolbar button,
+  .portfolio-panel .toolbar .button-like {
+    padding: 7px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .portfolio-panel .search {
+    min-width: 0;
+    height: 34px;
+    border-radius: 10px;
+  }
+
+  .portfolio-panel .search input {
+    font-size: 11px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+
+  .portfolio-panel .table-wrap {
+    overflow-x: visible;
+  }
+
+  .portfolio-panel table {
+    min-width: 0 !important;
+    width: 100%;
+    table-layout: fixed;
+    font-size: 10.5px;
+  }
+
+  .portfolio-panel th,
+  .portfolio-panel td {
+    padding: 6px 4px;
+    white-space: normal;
+    line-height: 1.15;
+  }
+
+  .portfolio-panel th:nth-child(1),
+  .portfolio-panel td:nth-child(1) {
+    width: 22px;
+  }
+
+  .portfolio-panel th:nth-child(2),
+  .portfolio-panel td:nth-child(2) {
+    width: 23%;
+  }
+
+  .portfolio-panel th:nth-child(3),
+  .portfolio-panel td:nth-child(3) {
+    width: 8%;
+  }
+
+  .portfolio-panel th:nth-child(4),
+  .portfolio-panel td:nth-child(4),
+  .portfolio-panel th:nth-child(5),
+  .portfolio-panel td:nth-child(5),
+  .portfolio-panel th:nth-child(6),
+  .portfolio-panel td:nth-child(6) {
+    width: 12%;
+  }
+
+  .portfolio-panel th:nth-child(7),
+  .portfolio-panel td:nth-child(7) {
+    width: 9%;
+  }
+
+  .portfolio-panel th:nth-child(8),
+  .portfolio-panel td:nth-child(8),
+  .portfolio-panel th:nth-child(9),
+  .portfolio-panel td:nth-child(9) {
+    width: 11%;
+  }
+
+  .portfolio-panel td small {
+    display: none;
+  }
+
+  .portfolio-panel .price-line {
+    display: grid;
+    gap: 3px;
+  }
+
+  .portfolio-panel .pill,
+  .portfolio-panel .change-pill {
+    padding: 3px 5px;
+    font-size: 10px;
+  }
+
+  .portfolio-panel .history-row td {
+    white-space: normal;
+  }
+
+  .portfolio-panel .history-item {
+    grid-template-columns: 70px 80px 80px 95px 95px 1fr 32px;
+    gap: 6px;
+    padding: 8px 10px;
+    font-size: 10.5px;
+  }
+
+  .summary-row td:first-child {
+    text-align: right;
+  }
+}
+
+
+.sync-notice {
+  font-size: 13px;
+  color: #475569;
+  background: rgba(255, 255, 255, 0.78);
+}
