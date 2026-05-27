@@ -27,13 +27,17 @@ function userIdFromRequest(request, env) {
     '';
 
   const allowedEmail = String(env.PI_ALLOWED_EMAIL || '').trim().toLowerCase();
+  const requireAccess = String(env.REQUIRE_ACCESS || '').toLowerCase() === 'true';
 
   if (allowedEmail && accessEmail && accessEmail.toLowerCase() !== allowedEmail) {
     return { error: 'Ten użytkownik nie ma dostępu do portfela.', status: 403 };
   }
 
-  if (allowedEmail && !accessEmail && env.REQUIRE_ACCESS === 'true') {
-    return { error: 'Brak nagłówka Cloudflare Access. Włącz Cloudflare Access lub wyłącz REQUIRE_ACCESS.', status: 401 };
+  if (requireAccess && !accessEmail) {
+    return {
+      error: 'Brak nagłówka Cloudflare Access. Włącz Cloudflare Access albo ustaw REQUIRE_ACCESS=false.',
+      status: 401
+    };
   }
 
   return {
@@ -42,7 +46,7 @@ function userIdFromRequest(request, env) {
 }
 
 async function ensureSchema(db) {
-  await db.exec(`
+  await db.prepare(`
     CREATE TABLE IF NOT EXISTS assets (
       user_id TEXT NOT NULL,
       id TEXT NOT NULL,
@@ -54,8 +58,10 @@ async function ensureSchema(db) {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (user_id, id)
-    );
+    )
+  `).run();
 
+  await db.prepare(`
     CREATE TABLE IF NOT EXISTS transactions (
       user_id TEXT NOT NULL,
       id TEXT NOT NULL,
@@ -68,11 +74,18 @@ async function ensureSchema(db) {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (user_id, id)
-    );
+    )
+  `).run();
 
-    CREATE INDEX IF NOT EXISTS idx_transactions_user_asset ON transactions(user_id, asset_id);
-    CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON transactions(user_id, date);
-  `);
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_transactions_user_asset
+    ON transactions(user_id, asset_id)
+  `).run();
+
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_transactions_user_date
+    ON transactions(user_id, date)
+  `).run();
 }
 
 function normalizeAsset(asset) {
@@ -90,9 +103,12 @@ function normalizeAsset(asset) {
 }
 
 function normalizeTransaction(transaction) {
+  const id = String(transaction?.id || crypto.randomUUID());
+  const assetId = String(transaction?.assetId || transaction?.asset_id || '');
+
   return {
-    id: String(transaction?.id || crypto.randomUUID()),
-    assetId: String(transaction?.assetId || transaction?.asset_id || ''),
+    id,
+    assetId,
     type: transaction?.type === 'sell' ? 'sell' : 'buy',
     date: String(transaction?.date || new Date().toISOString().slice(0, 10)),
     quantity: Number(transaction?.quantity) || 0,
@@ -101,9 +117,12 @@ function normalizeTransaction(transaction) {
   };
 }
 
-export async function onRequestGet({ request, env }) {
+async function readPortfolio(request, env) {
   if (!env.DB) {
-    return json({ error: 'Brak bindingu D1 o nazwie DB. Dodaj bazę D1 w Cloudflare Pages → Settings → Functions → D1 database bindings.' }, 503);
+    return json({
+      error: 'Brak bindingu D1 o nazwie DB.',
+      fix: 'Cloudflare Pages → gielda → Settings → Functions/Bindings → D1 database binding → Variable name: DB → database: pi_portfolio'
+    }, 503);
   }
 
   const auth = userIdFromRequest(request, env);
@@ -143,13 +162,17 @@ export async function onRequestGet({ request, env }) {
       price: Number(transaction.price),
       fees: Number(transaction.fees || 0)
     })),
-    storage: 'cloudflare-d1'
+    storage: 'cloudflare-d1',
+    userId: auth.userId
   });
 }
 
-export async function onRequestPost({ request, env }) {
+async function savePortfolio(request, env) {
   if (!env.DB) {
-    return json({ error: 'Brak bindingu D1 o nazwie DB. Dodaj bazę D1 w Cloudflare Pages → Settings → Functions → D1 database bindings.' }, 503);
+    return json({
+      error: 'Brak bindingu D1 o nazwie DB.',
+      fix: 'Cloudflare Pages → gielda → Settings → Functions/Bindings → D1 database binding → Variable name: DB → database: pi_portfolio'
+    }, 503);
   }
 
   const auth = userIdFromRequest(request, env);
@@ -162,7 +185,12 @@ export async function onRequestPost({ request, env }) {
   const assetIds = new Set(assets.map((asset) => asset.id));
   const transactions = (body.transactions || [])
     .map(normalizeTransaction)
-    .filter((transaction) => transaction.id && assetIds.has(transaction.assetId) && transaction.quantity > 0 && transaction.price > 0);
+    .filter((transaction) => (
+      transaction.id &&
+      assetIds.has(transaction.assetId) &&
+      transaction.quantity > 0 &&
+      transaction.price > 0
+    ));
 
   await ensureSchema(env.DB);
 
@@ -185,16 +213,7 @@ export async function onRequestPost({ request, env }) {
       env.DB.prepare(`
         INSERT INTO transactions (user_id, id, asset_id, type, date, quantity, price, fees, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-      `).bind(
-        auth.userId,
-        transaction.id,
-        transaction.assetId,
-        transaction.type,
-        transaction.date,
-        transaction.quantity,
-        transaction.price,
-        transaction.fees
-      )
+      `).bind(auth.userId, transaction.id, transaction.assetId, transaction.type, transaction.date, transaction.quantity, transaction.price, transaction.fees)
     );
   }
 
@@ -204,8 +223,33 @@ export async function onRequestPost({ request, env }) {
     ok: true,
     assets: assets.length,
     transactions: transactions.length,
-    storage: 'cloudflare-d1'
+    storage: 'cloudflare-d1',
+    userId: auth.userId
   });
+}
+
+function errorResponse(error) {
+  return json({
+    error: 'Błąd funkcji /api/portfolio',
+    message: error?.message || String(error),
+    stack: error?.stack || null
+  }, 500);
+}
+
+export async function onRequestGet({ request, env }) {
+  try {
+    return await readPortfolio(request, env);
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+export async function onRequestPost({ request, env }) {
+  try {
+    return await savePortfolio(request, env);
+  } catch (error) {
+    return errorResponse(error);
+  }
 }
 
 export async function onRequestOptions() {
