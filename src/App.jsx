@@ -438,6 +438,168 @@ function PortfolioChart({ series }) {
   );
 }
 
+
+function buildRealizedProfitLossSeries(transactions) {
+  const sorted = (transactions || [])
+    .slice()
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const positions = {};
+  const series = [];
+  let cumulativeRealized = 0;
+
+  for (const t of sorted) {
+    const assetId = t.assetId;
+    const quantity = Number(t.quantity) || 0;
+    const price = Number(t.price) || 0;
+    const fees = Number(t.fees) || 0;
+
+    if (!assetId || quantity <= 0 || price <= 0) continue;
+
+    if (!positions[assetId]) {
+      positions[assetId] = {
+        qty: 0,
+        cost: 0
+      };
+    }
+
+    const position = positions[assetId];
+
+    if (t.type === 'buy') {
+      position.qty += quantity;
+      position.cost += quantity * price + fees;
+      continue;
+    }
+
+    const sellQty = Math.min(quantity, position.qty);
+    if (sellQty <= 0 || position.qty <= 0) continue;
+
+    const avgCost = position.cost / position.qty;
+    const soldCost = avgCost * sellQty;
+    const sellRevenue = sellQty * price - fees;
+    const realized = sellRevenue - soldCost;
+
+    cumulativeRealized += realized;
+
+    position.qty -= sellQty;
+    position.cost -= soldCost;
+
+    if (position.qty < 0.0000001) position.qty = 0;
+    if (position.cost < 0.0000001) position.cost = 0;
+
+    series.push({
+      date: t.date,
+      value: cumulativeRealized,
+      realized
+    });
+  }
+
+  return series;
+}
+
+function RealizedProfitLossChart({ transactions }) {
+  const points = useMemo(
+    () => buildRealizedProfitLossSeries(transactions),
+    [transactions]
+  );
+
+  if (!points.length) {
+    return <div className="empty">Brak zrealizowanych zysków/strat — nie ma jeszcze sprzedaży.</div>;
+  }
+
+  const width = 920;
+  const height = 280;
+  const padding = 34;
+
+  const values = points.map((p) => p.value);
+  const minValue = Math.min(0, ...values);
+  const maxValue = Math.max(0, ...values);
+  const span = maxValue - minValue || 1;
+
+  const xFor = (index) => {
+    if (points.length === 1) return padding;
+    return padding + (index / (points.length - 1)) * (width - padding * 2);
+  };
+
+  const yFor = (value) => {
+    return height - padding - ((value - minValue) / span) * (height - padding * 2);
+  };
+
+  const line = points
+    .map((p, i) => `${xFor(i)},${yFor(p.value)}`)
+    .join(' ');
+
+  const zeroY = yFor(0);
+  const first = points[0];
+  const last = points[points.length - 1];
+  const current = last?.value || 0;
+
+  return (
+    <div className="chart-card realized-profit-card">
+      <div className="chart-stats">
+        <div>
+          <span>Od</span>
+          <strong>{formatDateShort(first.date)}</strong>
+        </div>
+        <div>
+          <span>Do</span>
+          <strong>{formatDateShort(last.date)}</strong>
+        </div>
+        <div>
+          <span>Zrealizowany wynik</span>
+          <strong className={current >= 0 ? 'good-text' : 'bad-text'}>
+            {formatMoney(current)}
+          </strong>
+        </div>
+      </div>
+
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="portfolio-chart realized-profit-chart"
+        role="img"
+        aria-label="Wykres zrealizowanych zysków i strat w czasie"
+      >
+        <polyline
+          points={`${padding},${padding} ${padding},${height - padding} ${width - padding},${height - padding}`}
+          fill="none"
+          stroke="#d9e4f1"
+          strokeWidth="2"
+        />
+
+        <line
+          x1={padding}
+          x2={width - padding}
+          y1={zeroY}
+          y2={zeroY}
+          stroke="#94a3b8"
+          strokeWidth="2"
+          strokeDasharray="6 6"
+        />
+
+        <polyline
+          points={line}
+          fill="none"
+          stroke={current >= 0 ? '#16a34a' : '#dc2626'}
+          strokeWidth="4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {points.filter((_, i) => i === 0 || i === points.length - 1).map((p) => (
+          <circle
+            key={`${p.date}-${p.value}`}
+            cx={xFor(points.indexOf(p))}
+            cy={yFor(p.value)}
+            r="5"
+            fill={p.value >= 0 ? '#16a34a' : '#dc2626'}
+          />
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+
 function ClosedPositionsCard({ rows }) {
   return (
     <div className="closed-card">
