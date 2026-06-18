@@ -961,3 +961,33 @@ td small {
   display: grid;
   gap: 10px;
 }
+
+.chart-divider {
+  margin: 24px 0 18px;
+  border-top: 1px solid var(--line);
+}
+
+.subchart-head {
+  padding: 0 22px 4px;
+}
+
+.subchart-head h3 {
+  margin: 0 0 5px;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.subchart-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.realized-profit-card {
+  padding-top: 10px;
+}
+
+.realized-profit-chart {
+  margin-top: 10px;
+}
