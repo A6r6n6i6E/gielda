@@ -1363,6 +1363,16 @@ function App() {
             </div>
           </div>
           <PortfolioChart series={portfolioSeries} />
+  <div className="chart-divider" />
+
+  <div className="subchart-head">
+    <h3>Zrealizowany zysk/strata w czasie</h3>
+    <p>
+      Wykres pokazuje narastający wynik ze zrealizowanych transakcji sprzedaży.
+    </p>
+  </div>
+
+  <RealizedProfitLossChart transactions={state.transactions} />        
         </div>
 
         <div className="panel closed-panel">
